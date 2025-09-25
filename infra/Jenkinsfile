@@ -3,7 +3,7 @@ pipeline {
   options { timestamps() }
 
   environment {
-    PROD_HOST = "3.26.49.38"  
+    PROD_HOST = "3.26.49.38"
     PROD_USER = "deploy"
   }
 
@@ -14,7 +14,7 @@ pipeline {
           branches: [[name: '*/develop']],
           userRemoteConfigs: [[
             url: 'https://github.com/swe40006pj/Pipeline-Version-Control.git',
-            credentialsId: 'github-https-pat'   
+            credentialsId: 'github-https-pat'
           ]]
         ])
       }
@@ -62,4 +62,3 @@ pipeline {
     failure { echo 'LEVEL 1 PIPELINE FAILED ❌' }
   }
 }
-
