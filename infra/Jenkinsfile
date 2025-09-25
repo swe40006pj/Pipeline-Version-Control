@@ -3,15 +3,21 @@ pipeline {
   options { timestamps() }
 
   environment {
-    PROD_HOST = "3.26.49.38"
-    PROD_USER = "deploy"
+
+    DOCKERHUB_USER = 'swe40006pj'   
+    IMAGE_NAME     = 'pipeline-demo'
+    DEV_TAG_LATEST = 'develop-latest'
+    PROD_TAG_LATEST= 'prod-latest'
+    BUILD_TAG      = "build-${env.BUILD_NUMBER}"
+
   }
 
   stages {
-    stage('Checkout (develop)') {
+    stage('Checkout') {
       steps {
         checkout([$class: 'GitSCM',
-          branches: [[name: '*/develop']],
+          branches: [[name: "*/${env.BRANCH_NAME}"]],
+
           userRemoteConfigs: [[
             url: 'https://github.com/swe40006pj/Pipeline-Version-Control.git',
             credentialsId: 'github-https-pat'
@@ -20,45 +26,70 @@ pipeline {
       }
     }
 
-    stage('Build (placeholder)') {
+    stage('Docker Build') {
       steps {
         sh '''
-          echo "Running placeholder build..."
-          python3 -V || true
-          ls -al
-          echo "BUILD_OK"
+          set -eux
+          docker build -t ${DOCKERHUB_USER}/${IMAGE_NAME}:${BUILD_TAG} app
         '''
       }
     }
 
-    stage('Smoke to STAGING (local)') {
+    stage('Tag & Push to Docker Hub') {
       steps {
-        sh '''
-          echo "===== STAGING (LOCAL) SMOKE ====="
-          echo STAGING_OK
-          hostname
-          uptime
-          echo "=================================="
-        '''
-      }
-    }
-
-    stage('Smoke to PROD (SSH)') {
-      steps {
-        sshagent (credentials: ['prod_ssh_key']) {
+        withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DH_USER', passwordVariable: 'DH_PASS')]) {
           sh '''
-            echo "===== PROD (REMOTE) SMOKE ====="
-            ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_HOST} \
-              "echo PROD_OK && hostname && uptime"
-            echo "================================"
+            set -eux
+            echo "$DH_PASS" | docker login -u "$DH_USER" --password-stdin
+
+            if [ "${BRANCH_NAME}" = "develop" ]; then
+              LATEST="${DEV_TAG_LATEST}"
+            elif [ "${BRANCH_NAME}" = "main" ]; then
+              LATEST="${PROD_TAG_LATEST}"
+            else
+              LATEST=""
+            fi
+
+            docker push ${DOCKERHUB_USER}/${IMAGE_NAME}:${BUILD_TAG}
+
+            if [ -n "$LATEST" ]; then
+              docker tag ${DOCKERHUB_USER}/${IMAGE_NAME}:${BUILD_TAG} ${DOCKERHUB_USER}/${IMAGE_NAME}:$LATEST
+              docker push ${DOCKERHUB_USER}/${IMAGE_NAME}:$LATEST
+            fi
           '''
         }
+      }
+    }
+
+    stage('Deploy to STAGING (local)') {
+      when { branch 'develop' }
+      steps {
+        sh '''
+          set -eux
+          cat > .env <<EOF
+DOCKERHUB_USER=${DOCKERHUB_USER}
+IMAGE_NAME=${IMAGE_NAME}
+IMAGE_TAG=${DEV_TAG_LATEST}
+EOF
+          docker compose down || true
+          docker compose up -d
+          sleep 5
+          curl -fsS http://localhost:5000 | grep -q "Hello from" || (echo "Service not responding"; exit 1)
+        '''
+      }
+    }
+
+    stage('Deploy to PROD is external') {
+      when { branch 'main' }
+      steps {
+        echo 'Prod uses pull-mode (cron/webhook on prod host). '
+
       }
     }
   }
 
   post {
-    success { echo 'LEVEL 1 PIPELINE PASSED ✅' }
-    failure { echo 'LEVEL 1 PIPELINE FAILED ❌' }
+    success { echo 'PIPELINE OK ✅' }
+    failure { echo 'PIPELINE FAILED ❌' }
   }
 }
