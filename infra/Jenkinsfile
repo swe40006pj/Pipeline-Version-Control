@@ -45,7 +45,7 @@ pipeline {
 
     stage('Smoke to PROD (SSH)') {
       steps {
-        sshagent (credentials: ['prod_ssh']) {
+        sshagent (credentials: ['prod_ssh_key']) {
           sh '''
             echo "===== PROD (REMOTE) SMOKE ====="
             ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_HOST} \
