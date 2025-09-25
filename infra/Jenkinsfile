@@ -3,16 +3,26 @@ pipeline {
   options { timestamps() }
 
   environment {
+
     DOCKERHUB_USER = 'swe40006pj'   
     IMAGE_NAME     = 'pipeline-demo'
     DEV_TAG_LATEST = 'develop-latest'
     PROD_TAG_LATEST= 'prod-latest'
     BUILD_TAG      = "build-${env.BUILD_NUMBER}"
+
   }
 
   stages {
     stage('Checkout') {
       steps {
+        checkout([$class: 'GitSCM',
+          branches: [[name: "*/${env.BRANCH_NAME}"]],
+
+          userRemoteConfigs: [[
+            url: 'https://github.com/swe40006pj/Pipeline-Version-Control.git',
+            credentialsId: 'github-https-pat'
+          ]]
+        ])
        checkout scm
       }
     }
@@ -74,6 +84,7 @@ EOF
       when { branch 'main' }
       steps {
         echo 'Prod uses pull-mode (cron/webhook on prod host). '
+
       }
     }
   }
