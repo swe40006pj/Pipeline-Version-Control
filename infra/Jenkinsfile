@@ -1,23 +1,22 @@
-// Level 1: checkout develop -> local placeholder build -> smoke test STAGING & PROD
-
 pipeline {
   agent any
   options { timestamps() }
 
   environment {
-    PROD_HOST = "3.26.49.38"  
+    PROD_HOST = "3.26.49.38"
     PROD_USER = "deploy"
   }
 
   stages {
     stage('Checkout (develop)') {
       steps {
-        sshagent (credentials: ['git_ssh_key']) {
-          checkout([$class: 'GitSCM',
-            branches: [[name: '*/develop']],
-            userRemoteConfigs: [[url: 'git@github.com:swe40006pj/Pipeline-Version-Control.git']]
-          ])
-        }
+        checkout([$class: 'GitSCM',
+          branches: [[name: '*/develop']],
+          userRemoteConfigs: [[
+            url: 'https://github.com/swe40006pj/Pipeline-Version-Control.git',
+            credentialsId: 'github-https-pat'
+          ]]
+        ])
       }
     }
 
