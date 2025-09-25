@@ -1,0 +1,65 @@
+// Level 1: checkout develop -> local placeholder build -> smoke test STAGING & PROD
+
+pipeline {
+  agent any
+  options { timestamps() }
+
+  environment {
+    PROD_HOST = "3.26.49.38"  
+    PROD_USER = "deploy"
+  }
+
+  stages {
+    stage('Checkout (develop)') {
+      steps {
+        sshagent (credentials: ['git_ssh_key']) {
+          checkout([$class: 'GitSCM',
+            branches: [[name: '*/develop']],
+            userRemoteConfigs: [[url: 'git@github.com:swe40006pj/Pipeline-Version-Control.git']]
+          ])
+        }
+      }
+    }
+
+    stage('Build (placeholder)') {
+      steps {
+        sh '''
+          echo "Running placeholder build..."
+          python3 -V || true
+          ls -al
+          echo "BUILD_OK"
+        '''
+      }
+    }
+
+    stage('Smoke to STAGING (local)') {
+      steps {
+        sh '''
+          echo "===== STAGING (LOCAL) SMOKE ====="
+          echo STAGING_OK
+          hostname
+          uptime
+          echo "=================================="
+        '''
+      }
+    }
+
+    stage('Smoke to PROD (SSH)') {
+      steps {
+        sshagent (credentials: ['prod_ssh']) {
+          sh '''
+            echo "===== PROD (REMOTE) SMOKE ====="
+            ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_HOST} \
+              "echo PROD_OK && hostname && uptime"
+            echo "================================"
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    success { echo 'LEVEL 1 PIPELINE PASSED ✅' }
+    failure { echo 'LEVEL 1 PIPELINE FAILED ❌' }
+  }
+}
