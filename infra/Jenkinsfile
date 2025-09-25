@@ -64,8 +64,8 @@ DOCKERHUB_USER=${DOCKERHUB_USER}
 IMAGE_NAME=${IMAGE_NAME}
 IMAGE_TAG=${DEV_TAG_LATEST}
 EOF
-          docker compose down || true
-          docker compose up -d
+          docker-compose down || true
+          docker-compose up -d
           sleep 5
           curl -fsS http://localhost:5000 | grep -q "Hello from" || (echo "Service not responding"; exit 1)
         '''
