@@ -71,7 +71,7 @@ EOF
           docker compose down || true
           docker compose up -d
           sleep 5
-          curl -fsS http://localhost:8080 | grep -q "Hello from" || (echo "Service not responding"; exit 1)
+          curl -fsS http://localhost:5000 | grep -q "Hello from" || (echo "Service not responding"; exit 1)
         '''
       }
     }
