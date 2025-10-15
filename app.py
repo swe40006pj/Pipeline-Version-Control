@@ -124,6 +124,9 @@ def api_convert():
     to_u     = request.args.get("to", type=str)
     value    = request.args.get("value", type=float)
 
+    if from_u: from_u = from_u.strip()
+    if to_u: to_u = to_u.strip()
+
     if category not in CATEGORIES:
         abort(400, description="Unknown category.")
     if value is None:
