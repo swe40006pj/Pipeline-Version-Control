@@ -1,0 +1,82 @@
+# ======================
+# Python build & cache
+# ======================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.log
+*.tmp
+*.bak
+*.swp
+*.DS_Store
+
+# ======================
+# Environment & virtualenv
+# ======================
+.env
+.venv
+env/
+venv/
+ENV/
+Pipfile
+Pipfile.lock
+
+# ======================
+# IDE / Editor settings
+# ======================
+.vscode/
+.idea/
+*.code-workspace
+
+# ======================
+# Test & coverage artifacts
+# ======================
+htmlcov/
+.coverage
+.coverage.*
+.cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+test-reports/
+reports/
+junit*.xml
+
+# ======================
+# OS temporary files
+# ======================
+Thumbs.db
+.DS_Store
+ehthumbs.db
+Icon?
+desktop.ini
+
+# ======================
+# Local runtime files (Flask, pytest, etc.)
+# ======================
+instance/
+*.db
+*.sqlite3
+*.sqlite
+*.log
+
+# ======================
+# Local app files not for upload
+# ======================
+../app.py
+app.py
+/app.py
+
+# ======================
+# Upload only key test files
+# ======================
+# Keep these (negate ignore)
+!pytest.ini
+!requirements.txt
+!conftest.py
+!README.md
+!tests/
+!tests/**/*
