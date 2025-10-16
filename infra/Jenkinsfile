@@ -1,5 +1,5 @@
 pipeline {
-  agent any
+  agent { label 'staging' }
 
   stages {
     // This stage remains the same. It checks out the feature branch code.
