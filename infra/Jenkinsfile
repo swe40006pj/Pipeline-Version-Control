@@ -2,123 +2,140 @@ pipeline {
   agent any
 
   stages {
-
+    // This stage remains the same. It checks out the feature branch code.
     stage('Checkout Current Branch') {
       steps {
         checkout scm
       }
     }
 
-    stage('Fetch Tests from test Branch') {
-      steps {
-        script {
-          sh '''
-            echo "=== Fetching tests from origin/test branch ==="
-            git fetch origin test
+    // STAGE REMOVED: The 'Fetch Tests from test Branch' stage has been deleted.
+    // Its logic is now inside the Docker stage below.
 
-            rm -rf tmp_test_branch
-            mkdir tmp_test_branch
-
-            # 导出 test 分支的测试相关文件
-            git archive origin/test test/tests test/pytest.ini test/conftest.py test/requirements.txt | tar -x -C tmp_test_branch || echo "⚠️ Some files may not exist."
-
-            # 替换到当前目录
-            for f in test/tests test/pytest.ini test/conftest.py test/requirements.txt; do
-              if [ -e tmp_test_branch/$f ]; then
-                echo "✅ Updating $f from test branch"
-                rm -rf $f
-                mv tmp_test_branch/$f ./
-              else
-                echo "⚠️ $f not found in test branch"
-              fi
-            done
-          '''
-        }
-      }
-    }
-
-    stage('Compare Categories and Run Tests (in Docker)') {
+    // This is now the main stage where everything happens inside the Docker container.
+    stage('Setup, Compare, and Test (in Docker)') {
       agent {
         docker {
           image 'python:3.11-slim'
-          args '-u root'   // 确保可以写入依赖文件
+          args '-u root' // Run as root to install packages
         }
       }
-
       steps {
+          // will be no more cleaning Workspace
         script {
           sh '''
-            set -e
-            echo "🐍 Using Python environment in Docker container"
-            python3 --version
-            pip install --upgrade pip
+  set -e # Exit immediately if a command fails.
 
-            echo "=== Installing test dependencies ==="
+  echo "🐍 Setting up environment in Docker container"
+  apt-get update && apt-get install -y git
+  git config --global --add safe.directory ${WORKSPACE}
 
-            if [ -f requirements.txt ]; then
-              pip install -r requirements.txt
-            else
-              pip install pytest
-            fi
+  # ====================================================================
+  # MOVED LOGIC: The test fetching logic is now here, inside Docker.
+  # ====================================================================
+  echo "=== Fetching tests from origin/test branch ==="
+  git fetch origin test
 
-            echo "=== Comparing categories between develop and current branch ==="
+  rm -rf tmp_test_branch
+  mkdir tmp_test_branch
 
-            # 获取 develop 分支版本的 app.py
-            git fetch origin develop
-            git show origin/develop:app/app.py > old_app.py
-            cp app/app.py new_app.py
+  # Export the test/ folder and config files from the test branch
+  git archive FETCH_HEAD test | tar -x -C tmp_test_branch || echo "⚠️ test folder not found"
+  git archive FETCH_HEAD test/pytest.ini test/conftest.py test/requirements.txt | tar -x -C tmp_test_branch || echo "⚠️ Some config files may not exist."
 
-            # 提取 categories
-            old_cats=$(grep -Eo "category=['\\\"]?[A-Za-z0-9_]+" old_app.py | awk -F= '{print tolower($2)}' | tr -d "'\\\"")
-            new_cats=$(grep -Eo "category=['\\\"]?[A-Za-z0-9_]+" new_app.py | awk -F= '{print tolower($2)}' | tr -d "'\\\"")
+  # Copy the fetched files into the current workspace
+  for f in test pytest.ini conftest.py requirements.txt; do
+    if [ -e tmp_test_branch/$f ]; then
+      echo "✅ Updating $f from test branch"
+      rm -rf $f
+      mv tmp_test_branch/$f ./
+    else
+      echo "⚠️ $f not found in test branch"
+    fi
+  done
+  
+  echo "Listing fetched test directory:"
+  ls -R test || echo "⚠️ test directory missing after fetch"
+  # ====================================================================
+  # End of moved logic.
+  # ====================================================================
 
-            echo "Old categories: $old_cats"
-            echo "New categories: $new_cats"
+  echo "=== Installing ALL dependencies ==="
+  # 1. Install testing dependencies
+  if [ -f requirements.txt ]; then
+    echo "📦 Installing test requirements..."
+    pip install -r requirements.txt
+  else
+    pip install pytest
+  fi
 
-            # 找出新增 categories
-            added_cats=""
-            for c in $new_cats; do
-              if ! echo "$old_cats" | grep -qw "$c"; then
-                added_cats="$added_cats $c"
-              fi
-            done
+  # 2. Install application dependencies
+  if [ -f app/requirements.txt ]; then
+    echo "📦 Installing application requirements..."
+    pip install -r app/requirements.txt
+  fi
 
-            if [ -z "$added_cats" ]; then
-              echo "✅ No new categories found. Skipping selective test run."
-              exit 0
-            fi
+  echo "=== Comparing categories between develop and current branch ==="
+  git fetch origin develop
+  git show origin/develop:app/app.py > old_app.py
 
-            echo "🧩 New categories detected: $added_cats"
+  # Extract categories from old and new app versions
+  mv app/app.py current_app.py.bak
+  mv old_app.py app/app.py
+  # We use '|| true' here to ignore the error from the old branch (Problem 2)
+  old_cats=$(python3 extract_cats.py | sort || true)
+  mv app/app.py old_app.py
+  mv current_app.py.bak app/app.py
+  new_cats=$(python3 extract_cats.py | sort)
 
-            # 逐个运行测试
-            missing_tests=0
-            failed_tests=0
-            for cat in $added_cats; do
-              echo "▶ Running tests for category: $cat"
-              pytest -k "$cat" || {
-                status=$?
-                if [ $status -eq 5 ]; then
-                  echo "❌ No test found for category '$cat'"
-                  missing_tests=1
-                else
-                  echo "❌ Some tests failed for category '$cat'"
-                  failed_tests=1
-                fi
-              }
-            done
+  echo "Old categories: $old_cats"
+  echo "New categories: $new_cats"
 
-            if [ $missing_tests -eq 1 ]; then
-              echo "❌ Missing tests for one or more categories."
-              exit 1
-            fi
+  added_cats=""
+  for c in $new_cats; do
+    if ! echo "$old_cats" | grep -qw "$c"; then
+      added_cats="$added_cats $c"
+    fi
+  done
+  
+  # Trim leading space from added_cats
+  added_cats=$(echo "$added_cats" | sed 's/^ *//g')
 
-            if [ $failed_tests -eq 1 ]; then
-              echo "❌ One or more tests failed."
-              exit 1
-            fi
+  if [ -z "$added_cats" ]; then
+    echo "✅ No new categories found. Skipping selective test run."
+    exit 0
+  fi
 
-            echo "✅ All new categories have tests and all passed!"
-          '''
+  echo "🧩 New categories detected: $added_cats"
+
+  missing_tests=0
+  failed_tests=0
+  for cat in $added_cats; do
+    echo "▶ Running tests for category: $cat"
+    pytest test -k "$cat" || {
+      status=$?
+      if [ $status -eq 5 ]; then
+        echo "❌ No test found for category '$cat'"
+        missing_tests=1
+      else
+        echo "❌ Some tests failed for category '$cat'"
+        failed_tests=1
+      fi
+    }
+  done
+
+  if [ $missing_tests -eq 1 ]; then
+    echo "❌ Missing tests for one or more categories."
+    exit 1
+  fi
+
+  if [ $failed_tests -eq 1 ]; then
+    echo "❌ One or more tests failed."
+    exit 1
+  fi
+
+  echo "✅ All new categories have tests and all passed!"
+'''
         }
       }
     }
@@ -133,4 +150,3 @@ pipeline {
     }
   }
 }
-

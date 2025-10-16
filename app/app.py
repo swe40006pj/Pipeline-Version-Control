@@ -55,16 +55,6 @@ CATEGORIES = {
             "cup": "Cup (US)",
             "gallon": "Gallon (US)"
         }
-    },
-    "volue": {
-        "label": "Volume (Liquids, US)",
-        "units": {
-            "ml": "Milliliter (mL)",
-            "L": "Liter (L)",
-            "floz": "Fluid ounce (fl oz, US)",
-            "cup": "Cup (US)",
-            "gallon": "Gallon (US)"
-        }
     }
 }
 
