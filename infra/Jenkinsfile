@@ -19,11 +19,14 @@ pipeline {
             rm -rf tmp_test_branch
             mkdir tmp_test_branch
 
-            # 导出 test 分支的测试相关文件
-            git archive origin/test test/tests test/pytest.ini test/conftest.py test/requirements.txt | tar -x -C tmp_test_branch || echo "⚠️ Some files may not exist."
 
-            # 替换到当前目录
-            for f in test/tests test/pytest.ini test/conftest.py test/requirements.txt; do
+            # 导出 test 分支中 test/ 文件夹和配置文件
+            git archive origin/test test | tar -x -C tmp_test_branch || echo "⚠️ test folder not found"
+            git archive origin/test test/pytest.ini test/conftest.py test/requirements.txt | tar -x -C tmp_test_branch || echo "⚠️ Some config files may not exist."
+
+            # 将测试文件复制到当前工作区
+            for f in test pytest.ini conftest.py requirements.txt; do
+
               if [ -e tmp_test_branch/$f ]; then
                 echo "✅ Updating $f from test branch"
                 rm -rf $f
@@ -32,6 +35,8 @@ pipeline {
                 echo "⚠️ $f not found in test branch"
               fi
             done
+
+            ls -R test || echo "⚠️ test directory missing after fetch"
           '''
         }
       }
@@ -41,7 +46,9 @@ pipeline {
       agent {
         docker {
           image 'python:3.11-slim'
-          args '-u root'   // 确保可以写入依赖文件
+
+          args '-u root'
+
         }
       }
 
@@ -51,19 +58,22 @@ pipeline {
             set -e
             echo "🐍 Using Python environment in Docker container"
             python3 --version
-            pip install --upgrade pip
+
+
+            # 安装 git（python:3.11-slim 默认不带）
+            apt-get update && apt-get install -y git
+
 
             echo "=== Installing test dependencies ==="
 
             if [ -f requirements.txt ]; then
+              pip install --upgrade pip
               pip install -r requirements.txt
             else
               pip install pytest
             fi
 
             echo "=== Comparing categories between develop and current branch ==="
-
-            # 获取 develop 分支版本的 app.py
             git fetch origin develop
             git show origin/develop:app/app.py > old_app.py
             cp app/app.py new_app.py
@@ -75,7 +85,6 @@ pipeline {
             echo "Old categories: $old_cats"
             echo "New categories: $new_cats"
 
-            # 找出新增 categories
             added_cats=""
             for c in $new_cats; do
               if ! echo "$old_cats" | grep -qw "$c"; then
@@ -90,12 +99,11 @@ pipeline {
 
             echo "🧩 New categories detected: $added_cats"
 
-            # 逐个运行测试
             missing_tests=0
             failed_tests=0
             for cat in $added_cats; do
               echo "▶ Running tests for category: $cat"
-              pytest -k "$cat" || {
+              pytest test -k "$cat" || {
                 status=$?
                 if [ $status -eq 5 ]; then
                   echo "❌ No test found for category '$cat'"
