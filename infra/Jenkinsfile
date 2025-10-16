@@ -3,18 +3,51 @@ pipeline {
 
 
   stages {
-    stage('Checkout') {
+    stage('Checkout Current Branch') {
       steps {
         checkout scm
+      }
+    }
+
+    stage('Fetch Tests from test Branch') {
+      steps {
+        script {
+          sh '''
+            echo "=== Fetching tests from origin/test branch ==="
+            git fetch origin test
+
+            rm -rf tmp_test_branch
+            mkdir tmp_test_branch
+
+            # 导出 test 分支的测试相关文件
+            git archive origin/test tests pytest.ini conftest.py requirements.txt | tar -x -C tmp_test_branch || echo "⚠️ Some files may not exist."
+
+            # 替换到当前目录
+            for f in tests pytest.ini conftest.py requirements.txt; do
+              if [ -e tmp_test_branch/$f ]; then
+                echo "✅ Updating $f from test branch"
+                rm -rf $f
+                mv tmp_test_branch/$f .
+              else
+                echo "⚠️ $f not found in test branch"
+              fi
+            done
+          '''
+        }
+
       }
     }
 
     stage('Compare Categories and Run Tests') {
       steps {
         script {
-          // 确保 Python 环境
           sh '''
-            pip install pytest
+            echo "=== Setting up test environment ==="
+            if [ -f requirements.txt ]; then
+              pip install -r requirements.txt
+            else
+              pip install pytest
+            fi
 
             echo "=== Comparing categories between develop and current branch ==="
 
@@ -76,6 +109,16 @@ pipeline {
           '''
         }
       }
+    }
+  }
+}
+
+  post {
+    success {
+      echo 'PIPELINE ✅ All category tests passed.'
+    }
+    failure {
+      echo 'PIPELINE ❌ Some tests failed or missing.'
     }
   }
 }
