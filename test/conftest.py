@@ -5,7 +5,7 @@ import pytest
 # add upper directory to the python searching dir
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app import app   
+from app.app import app   
 
 @pytest.fixture
 def client():
