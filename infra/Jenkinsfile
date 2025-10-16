@@ -34,6 +34,7 @@ pipeline {
             done
           '''
         }
+
       }
     }
 
@@ -110,6 +111,7 @@ pipeline {
       }
     }
   }
+}
 
   post {
     success {
@@ -119,5 +121,3 @@ pipeline {
       echo 'PIPELINE ❌ Some tests failed or missing.'
     }
   }
-}
-
