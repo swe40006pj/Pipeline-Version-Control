@@ -80,8 +80,14 @@ pipeline {
             cp app/app.py new_app.py
 
             # 提取 categories
-            old_cats=$(grep -Eo "category=['\\\"]?[A-Za-z0-9_]+" old_app.py | awk -F= '{print tolower($2)}' | tr -d "'\\\"")
-            new_cats=$(grep -Eo "category=['\\\"]?[A-Za-z0-9_]+" new_app.py | awk -F= '{print tolower($2)}' | tr -d "'\\\"")
+            mv app/app.py current_app.py.bak # 备份当前文件
+            mv old_app.py app/app.py         # 将旧文件放到正确位置
+            old_cats=$(python3 extract_cats.py | sort)
+            mv app/app.py old_app.py         # 恢复旧文件名
+            mv current_app.py.bak app/app.py # 恢复当前文件
+
+            # 3. 提取新的分类
+            new_cats=$(python3 extract_cats.py | sort)
 
             echo "Old categories: $old_cats"
             echo "New categories: $new_cats"
