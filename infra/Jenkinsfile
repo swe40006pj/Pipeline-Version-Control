@@ -1,64 +1,80 @@
 pipeline {
   agent any
-  options { timestamps() }
-
-  environment {
-    PROD_HOST = "3.26.49.38"
-    PROD_USER = "deploy"
-  }
 
   stages {
-    stage('Checkout (develop)') {
+    stage('Checkout') {
       steps {
-        checkout([$class: 'GitSCM',
-          branches: [[name: '*/develop']],
-          userRemoteConfigs: [[
-            url: 'https://github.com/swe40006pj/Pipeline-Version-Control.git',
-            credentialsId: 'github-https-pat'
-          ]]
-        ])
+        checkout scm
       }
     }
 
-    stage('Build (placeholder)') {
+    stage('Compare Categories and Run Tests') {
       steps {
-        sh '''
-          echo "Running placeholder build..."
-          python3 -V || true
-          ls -al
-          echo "BUILD_OK"
-        '''
-      }
-    }
-
-    stage('Smoke to STAGING (local)') {
-      steps {
-        sh '''
-          echo "===== STAGING (LOCAL) SMOKE ====="
-          echo STAGING_OK
-          hostname
-          uptime
-          echo "=================================="
-        '''
-      }
-    }
-
-    stage('Smoke to PROD (SSH)') {
-      steps {
-        sshagent (credentials: ['prod_ssh_key']) {
+        script {
+          // 确保 Python 环境
           sh '''
-            echo "===== PROD (REMOTE) SMOKE ====="
-            ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_HOST} \
-              "echo PROD_OK && hostname && uptime"
-            echo "================================"
+            pip install pytest
+
+            echo "=== Comparing categories between develop and current branch ==="
+
+            # 获取 develop 分支版本的 app.py
+            git fetch origin develop
+            git show origin/develop:app/app.py > old_app.py
+            cp app/app.py new_app.py
+
+            # 提取 categories
+            old_cats=$(grep -Eo "category=['\\\"]?[A-Za-z0-9_]+" old_app.py | awk -F= '{print tolower($2)}' | tr -d "'\\\"")
+            new_cats=$(grep -Eo "category=['\\\"]?[A-Za-z0-9_]+" new_app.py | awk -F= '{print tolower($2)}' | tr -d "'\\\"")
+
+            echo "Old categories: $old_cats"
+            echo "New categories: $new_cats"
+
+            # 找出新增 categories
+            added_cats=""
+            for c in $new_cats; do
+              if ! echo "$old_cats" | grep -qw "$c"; then
+                added_cats="$added_cats $c"
+              fi
+            done
+
+            if [ -z "$added_cats" ]; then
+              echo "✅ No new categories found. Skipping selective test run."
+              exit 0
+            fi
+
+            echo "🧩 New categories detected: $added_cats"
+
+            # 逐个运行测试
+            missing_tests=0
+            failed_tests=0
+            for cat in $added_cats; do
+              echo "▶ Running tests for category: $cat"
+              pytest -k "$cat" || {
+                status=$?
+                if [ $status -eq 5 ]; then
+                  echo "❌ No test found for category '$cat'"
+                  missing_tests=1
+                else
+                  echo "❌ Some tests failed for category '$cat'"
+                  failed_tests=1
+                fi
+              }
+            done
+
+            if [ $missing_tests -eq 1 ]; then
+              echo "❌ Missing tests for one or more categories."
+              exit 1
+            fi
+
+            if [ $failed_tests -eq 1 ]; then
+              echo "❌ One or more tests failed."
+              exit 1
+            fi
+
+            echo "✅ All new categories have tests and all passed!"
           '''
         }
       }
     }
-  }
-
-  post {
-    success { echo 'LEVEL 1 PIPELINE PASSED ✅' }
-    failure { echo 'LEVEL 1 PIPELINE FAILED ❌' }
   }
 }
