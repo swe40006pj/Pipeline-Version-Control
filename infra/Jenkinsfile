@@ -19,16 +19,18 @@ pipeline {
             rm -rf tmp_test_branch
             mkdir tmp_test_branch
 
+
             # 导出 test 分支中 test/ 文件夹和配置文件
             git archive origin/test test | tar -x -C tmp_test_branch || echo "⚠️ test folder not found"
             git archive origin/test test/pytest.ini test/conftest.py test/requirements.txt | tar -x -C tmp_test_branch || echo "⚠️ Some config files may not exist."
 
             # 将测试文件复制到当前工作区
             for f in test pytest.ini conftest.py requirements.txt; do
+
               if [ -e tmp_test_branch/$f ]; then
                 echo "✅ Updating $f from test branch"
                 rm -rf $f
-                mv tmp_test_branch/$f .
+                mv tmp_test_branch/$f ./
               else
                 echo "⚠️ $f not found in test branch"
               fi
@@ -44,7 +46,9 @@ pipeline {
       agent {
         docker {
           image 'python:3.11-slim'
+
           args '-u root'
+
         }
       }
 
@@ -55,8 +59,10 @@ pipeline {
             echo "🐍 Using Python environment in Docker container"
             python3 --version
 
+
             # 安装 git（python:3.11-slim 默认不带）
             apt-get update && apt-get install -y git
+
 
             echo "=== Installing test dependencies ==="
 
