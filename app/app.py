@@ -55,6 +55,16 @@ CATEGORIES = {
             "cup": "Cup (US)",
             "gallon": "Gallon (US)"
         }
+    },
+    "volue": {
+        "label": "Volume (Liquids, US)",
+        "units": {
+            "ml": "Milliliter (mL)",
+            "L": "Liter (L)",
+            "floz": "Fluid ounce (fl oz, US)",
+            "cup": "Cup (US)",
+            "gallon": "Gallon (US)"
+        }
     }
 }
 
@@ -85,13 +95,6 @@ LINEAR_BASE = {
         "acre": 4046.8564224       # 1 acre = 4046.8564224 m²
     },
     "volume": {
-        "L": 1.0,
-        "ml": 0.001,                       # 1 mL = 0.001 L
-        "floz": 0.0295735295625,           # US fl oz
-        "cup": 0.2365882365,               # US cup
-        "gallon": 3.785411784              # US liquid gallon
-    },
-    "volue": {
         "L": 1.0,
         "ml": 0.001,                       # 1 mL = 0.001 L
         "floz": 0.0295735295625,           # US fl oz
