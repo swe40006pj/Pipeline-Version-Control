@@ -1,8 +1,8 @@
 pipeline {
   agent any
 
-
   stages {
+
     stage('Checkout Current Branch') {
       steps {
         checkout scm
@@ -20,33 +20,41 @@ pipeline {
             mkdir tmp_test_branch
 
             # 导出 test 分支的测试相关文件
-            git archive origin/test tests pytest.ini conftest.py requirements.txt | tar -x -C tmp_test_branch || echo "⚠️ Some files may not exist."
+            git archive origin/test test/tests test/pytest.ini test/conftest.py test/requirements.txt | tar -x -C tmp_test_branch || echo "⚠️ Some files may not exist."
 
             # 替换到当前目录
-            for f in tests pytest.ini conftest.py requirements.txt; do
+            for f in test/tests test/pytest.ini test/conftest.py test/requirements.txt; do
               if [ -e tmp_test_branch/$f ]; then
                 echo "✅ Updating $f from test branch"
                 rm -rf $f
-                mv tmp_test_branch/$f .
+                mv tmp_test_branch/$f ./
               else
                 echo "⚠️ $f not found in test branch"
               fi
             done
           '''
         }
-
       }
     }
 
-    stage('Compare Categories and Run Tests') {
+    stage('Compare Categories and Run Tests (in Docker)') {
+      agent {
+        docker {
+          image 'python:3.11-slim'
+          args '-u root'   // 确保可以写入依赖文件
+        }
+      }
+
       steps {
         script {
           sh '''
-           echo "=== Setting up Python environment ==="
-            python3 --version || apt-get update && apt-get install -y python3 python3-pip
+            set -e
+            echo "🐍 Using Python environment in Docker container"
+            python3 --version
             pip install --upgrade pip
-            
-            echo "=== Setting up test environment ==="
+
+            echo "=== Installing test dependencies ==="
+
             if [ -f requirements.txt ]; then
               pip install -r requirements.txt
             else
@@ -115,7 +123,6 @@ pipeline {
       }
     }
   }
-}
 
   post {
     success {
@@ -125,4 +132,5 @@ pipeline {
       echo 'PIPELINE ❌ Some tests failed or missing.'
     }
   }
+}
 
