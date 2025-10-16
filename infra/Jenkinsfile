@@ -2,31 +2,48 @@ pipeline {
   agent any
 
   stages {
-
+    // This stage remains the same. It checks out the feature branch code.
     stage('Checkout Current Branch') {
       steps {
         checkout scm
       }
     }
 
-    stage('Fetch Tests from test Branch') {
+    // STAGE REMOVED: The 'Fetch Tests from test Branch' stage has been deleted.
+    // Its logic is now inside the Docker stage below.
+
+    // This is now the main stage where everything happens inside the Docker container.
+    stage('Setup, Compare, and Test (in Docker)') {
+      agent {
+        docker {
+          image 'python:3.11-slim'
+          args '-u root' // Run as root to install packages
+        }
+      }
       steps {
         script {
           sh '''
+            set -e // Exit immediately if a command fails.
+
+            echo "🐍 Setting up environment in Docker container"
+            apt-get update && apt-get install -y git
+            git config --global --add safe.directory ${WORKSPACE}
+
+            // ====================================================================
+            // MOVED LOGIC: The test fetching logic is now here, inside Docker.
+            // ====================================================================
             echo "=== Fetching tests from origin/test branch ==="
             git fetch origin test
 
             rm -rf tmp_test_branch
             mkdir tmp_test_branch
 
-
-            # 导出 test 分支中 test/ 文件夹和配置文件
+            # Export the test/ folder and config files from the test branch
             git archive FETCH_HEAD test | tar -x -C tmp_test_branch || echo "⚠️ test folder not found"
             git archive FETCH_HEAD test/pytest.ini test/conftest.py test/requirements.txt | tar -x -C tmp_test_branch || echo "⚠️ Some config files may not exist."
 
-            # 将测试文件复制到当前工作区
+            # Copy the fetched files into the current workspace
             for f in test pytest.ini conftest.py requirements.txt; do
-
               if [ -e tmp_test_branch/$f ]; then
                 echo "✅ Updating $f from test branch"
                 rm -rf $f
@@ -35,64 +52,38 @@ pipeline {
                 echo "⚠️ $f not found in test branch"
               fi
             done
-
+            
+            echo "Listing fetched test directory:"
             ls -R test || echo "⚠️ test directory missing after fetch"
-          '''
-        }
-      }
-    }
+            // ====================================================================
+            // End of moved logic.
+            // ====================================================================
 
-    stage('Compare Categories and Run Tests (in Docker)') {
-      agent {
-        docker {
-          image 'python:3.11-slim'
-
-          args '-u root'
-
-        }
-      }
-
-      steps {
-        script {
-          sh '''
-            set -e
-            echo "🐍 Using Python environment in Docker container"
-            python3 --version
-
-
-            # 安装 git（python:3.11-slim 默认不带）
-            apt-get update && apt-get install -y git
-            git config --global --add safe.directory ${WORKSPACE}
-
-
-            echo "=== Installing test dependencies ==="
-
+            echo "=== Installing ALL dependencies ==="
+            # 1. Install testing dependencies
             if [ -f requirements.txt ]; then
-              pip install --upgrade pip
+              echo "📦 Installing test requirements..."
               pip install -r requirements.txt
             else
               pip install pytest
             fi
 
-            # 2. 安装应用依赖 (Flask等)
-              if [ -f app/requirements.txt ]; then
-                echo "📦 Installing application requirements..."
-                pip install -r app/requirements.txt
-              fi
+            # 2. Install application dependencies
+            if [ -f app/requirements.txt ]; then
+              echo "📦 Installing application requirements..."
+              pip install -r app/requirements.txt
+            fi
 
             echo "=== Comparing categories between develop and current branch ==="
             git fetch origin develop
             git show origin/develop:app/app.py > old_app.py
-            cp app/app.py new_app.py
 
-            # 提取 categories
-            mv app/app.py current_app.py.bak # 备份当前文件
-            mv old_app.py app/app.py         # 将旧文件放到正确位置
+            # Extract categories from old and new app versions
+            mv app/app.py current_app.py.bak
+            mv old_app.py app/app.py
             old_cats=$(python3 extract_cats.py | sort)
-            mv app/app.py old_app.py         # 恢复旧文件名
-            mv current_app.py.bak app/app.py # 恢复当前文件
-
-            # 3. 提取新的分类
+            mv app/app.py old_app.py
+            mv current_app.py.bak app/app.py
             new_cats=$(python3 extract_cats.py | sort)
 
             echo "Old categories: $old_cats"
@@ -104,6 +95,9 @@ pipeline {
                 added_cats="$added_cats $c"
               fi
             done
+            
+            # Trim leading space from added_cats
+            added_cats=$(echo "$added_cats" | sed 's/^ *//g')
 
             if [ -z "$added_cats" ]; then
               echo "✅ No new categories found. Skipping selective test run."
@@ -116,6 +110,7 @@ pipeline {
             failed_tests=0
             for cat in $added_cats; do
               echo "▶ Running tests for category: $cat"
+              # This command should now find the 'test' directory
               pytest test -k "$cat" || {
                 status=$?
                 if [ $status -eq 5 ]; then
@@ -154,4 +149,3 @@ pipeline {
     }
   }
 }
-
