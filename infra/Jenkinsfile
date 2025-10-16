@@ -21,11 +21,7 @@ pipeline {
         }
       }
       steps {
-          // STEP 1: Clean the workspace to remove any old lock files.
-        cleanWs()
-
-          // STEP 2: Explicitly check out the code *after* cleaning.
-        checkout scm
+          // will be no more cleaning Workspace
         script {
           sh '''
   set -e # Exit immediately if a command fails.
