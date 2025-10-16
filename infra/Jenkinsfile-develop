@@ -58,6 +58,7 @@ pipeline {
           
           sh """
             echo "=== Deploying stage container on local EC2 ==="
+            docker ps --filter "publish=5000" -q | xargs -r docker rm -f
             docker rm -f ${APP_NAME}-stage || true
             docker pull ${IMAGE_STAGE}
             docker run -d --name ${APP_NAME}-stage -p 5000:5000 ${IMAGE_STAGE}
