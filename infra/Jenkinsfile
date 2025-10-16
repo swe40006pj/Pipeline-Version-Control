@@ -54,6 +54,7 @@ pipeline {
             pip install --upgrade pip
 
             echo "=== Installing test dependencies ==="
+
             if [ -f requirements.txt ]; then
               pip install -r requirements.txt
             else
@@ -132,3 +133,4 @@ pipeline {
     }
   }
 }
+
