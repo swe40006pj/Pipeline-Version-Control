@@ -1,6 +1,7 @@
 pipeline {
   agent any
 
+
   stages {
     stage('Checkout Current Branch') {
       steps {
@@ -119,3 +120,4 @@ pipeline {
     }
   }
 }
+
