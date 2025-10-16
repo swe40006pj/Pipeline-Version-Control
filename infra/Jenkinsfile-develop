@@ -1,0 +1,73 @@
+pipeline {
+  agent { label 'staging' }
+
+  environment {
+    DOCKERHUB_NAMESPACE = "pipeline-version-control"
+    APP_NAME = "unit-converter"
+    DOCKERHUB_CREDENTIALS = 'docker-hub'
+    GITHUB_CREDENTIALS = 'github-https-pat'
+    STAGE_TAG = "stage"
+  }
+
+  stages {
+
+    stage('Checkout develop branch') {
+      steps {
+        git branch: 'develop',
+            credentialsId: "${GITHUB_CREDENTIALS}",
+            url: 'https://github.com/swe40006pj/Pipeline-Version-Control.git'
+      }
+    }
+
+    stage('Build Docker Image') {
+      steps {
+        script {
+          COMMIT_ID = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+          IMAGE_COMMIT = "docker.io/${DOCKERHUB_NAMESPACE}/${APP_NAME}:${COMMIT_ID}"
+          IMAGE_STAGE = "docker.io/${DOCKERHUB_NAMESPACE}/${APP_NAME}:${STAGE_TAG}"
+
+          sh """
+            echo "=== Building image for develop (${IMAGE_STAGE}) ==="
+            docker build -t ${IMAGE_COMMIT} .
+            docker tag ${IMAGE_COMMIT} ${IMAGE_STAGE}
+          """
+        }
+      }
+    }
+
+    stage('Push to Docker Hub (:stage)') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: "${DOCKERHUB_CREDENTIALS}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+          sh """
+            echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
+            docker push ${IMAGE_COMMIT}
+            docker push ${IMAGE_STAGE}
+            docker logout
+          """
+        }
+      }
+    }
+
+    stage('Deploy on Staging EC2') {
+      steps {
+        script {
+          sh """
+            echo "=== Deploying stage container on local EC2 ==="
+            docker rm -f ${APP_NAME}-stage || true
+            docker pull ${IMAGE_STAGE}
+            docker run -d --name ${APP_NAME}-stage -p 5000:5000 ${IMAGE_STAGE}
+          """
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      echo "✅ Staging environment updated successfully!"
+    }
+    failure {
+      echo "❌ Staging build or deploy failed."
+    }
+  }
+}
