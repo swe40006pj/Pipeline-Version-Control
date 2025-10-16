@@ -43,7 +43,7 @@ pipeline {
         script {
           sh '''
            echo "=== Setting up Python environment ==="
-            python3 --version || apt-get update && apt-get install -y python3 python3-pip
+            python3 --version || sudo apt-get update && sudo apt-get install -y python3 python3-pip
             pip install --upgrade pip
 
             echo "=== Setting up test environment ==="
