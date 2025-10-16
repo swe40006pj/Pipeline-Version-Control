@@ -21,6 +21,7 @@ pipeline {
         }
       }
       steps {
+          // will be no more cleaning Workspace
         script {
           sh '''
   set -e # Exit immediately if a command fails.
