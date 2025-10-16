@@ -90,6 +90,13 @@ LINEAR_BASE = {
         "floz": 0.0295735295625,           # US fl oz
         "cup": 0.2365882365,               # US cup
         "gallon": 3.785411784              # US liquid gallon
+    },
+    "volue": {
+        "L": 1.0,
+        "ml": 0.001,                       # 1 mL = 0.001 L
+        "floz": 0.0295735295625,           # US fl oz
+        "cup": 0.2365882365,               # US cup
+        "gallon": 3.785411784              # US liquid gallon
     }
 }
 
