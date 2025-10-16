@@ -74,6 +74,12 @@ pipeline {
               pip install pytest
             fi
 
+            # 2. 安装应用依赖 (Flask等)
+              if [ -f app/requirements.txt ]; then
+                echo "📦 Installing application requirements..."
+                pip install -r app/requirements.txt
+              fi
+
             echo "=== Comparing categories between develop and current branch ==="
             git fetch origin develop
             git show origin/develop:app/app.py > old_app.py
