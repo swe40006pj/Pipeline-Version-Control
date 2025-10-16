@@ -21,8 +21,8 @@ pipeline {
 
 
             # 导出 test 分支中 test/ 文件夹和配置文件
-            git archive origin/test test | tar -x -C tmp_test_branch || echo "⚠️ test folder not found"
-            git archive origin/test test/pytest.ini test/conftest.py test/requirements.txt | tar -x -C tmp_test_branch || echo "⚠️ Some config files may not exist."
+            git archive FETCH_HEAD test | tar -x -C tmp_test_branch || echo "⚠️ test folder not found"
+            git archive FETCH_HEAD test/pytest.ini test/conftest.py test/requirements.txt | tar -x -C tmp_test_branch || echo "⚠️ Some config files may not exist."
 
             # 将测试文件复制到当前工作区
             for f in test pytest.ini conftest.py requirements.txt; do
@@ -62,6 +62,7 @@ pipeline {
 
             # 安装 git（python:3.11-slim 默认不带）
             apt-get update && apt-get install -y git
+            git config --global --add safe.directory ${WORKSPACE}
 
 
             echo "=== Installing test dependencies ==="
