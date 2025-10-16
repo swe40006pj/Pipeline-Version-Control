@@ -3,7 +3,7 @@ pipeline {
   agent { label 'staging' }
 
   environment {
-    DOCKERHUB_NAMESPACE = "pipeline-version-control"
+    DOCKERHUB_NAMESPACE = "swe40006pj" 
     APP_NAME            = "unit-converter"
     DOCKERHUB_CREDENTIALS = 'docker-hub'
     // GITHUB_CREDENTIALS is no longer needed after removing the manual git step
