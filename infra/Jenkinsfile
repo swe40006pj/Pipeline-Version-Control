@@ -1,88 +1,82 @@
 pipeline {
   agent any
-  options { timestamps() }
 
-  environment {
-
-    DOCKERHUB_USER = 'swe40006pj'   
-    IMAGE_NAME     = 'pipeline-demo'
-    DEV_TAG_LATEST = 'develop-latest'
-    PROD_TAG_LATEST= 'prod-latest'
-    BUILD_TAG      = "build-${env.BUILD_NUMBER}"
-
-  }
 
   stages {
     stage('Checkout') {
       steps {
-       checkout scm
+        checkout scm
       }
     }
 
-    stage('Docker Build') {
+    stage('Compare Categories and Run Tests') {
       steps {
-        sh '''
-          set -eux
-          docker build -t ${DOCKERHUB_USER}/${IMAGE_NAME}:${BUILD_TAG} app
-        '''
-      }
-    }
-
-    stage('Tag & Push to Docker Hub') {
-      steps {
-        withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DH_USER', passwordVariable: 'DH_PASS')]) {
+        script {
+          // 确保 Python 环境
           sh '''
-            set -eux
-            echo "$DH_PASS" | docker login -u "$DH_USER" --password-stdin
+            pip install pytest
 
-            if [ "${BRANCH_NAME}" = "develop" ]; then
-              LATEST="${DEV_TAG_LATEST}"
-            elif [ "${BRANCH_NAME}" = "main" ]; then
-              LATEST="${PROD_TAG_LATEST}"
-            else
-              LATEST=""
+            echo "=== Comparing categories between develop and current branch ==="
+
+            # 获取 develop 分支版本的 app.py
+            git fetch origin develop
+            git show origin/develop:app/app.py > old_app.py
+            cp app/app.py new_app.py
+
+            # 提取 categories
+            old_cats=$(grep -Eo "category=['\\\"]?[A-Za-z0-9_]+" old_app.py | awk -F= '{print tolower($2)}' | tr -d "'\\\"")
+            new_cats=$(grep -Eo "category=['\\\"]?[A-Za-z0-9_]+" new_app.py | awk -F= '{print tolower($2)}' | tr -d "'\\\"")
+
+            echo "Old categories: $old_cats"
+            echo "New categories: $new_cats"
+
+            # 找出新增 categories
+            added_cats=""
+            for c in $new_cats; do
+              if ! echo "$old_cats" | grep -qw "$c"; then
+                added_cats="$added_cats $c"
+              fi
+            done
+
+            if [ -z "$added_cats" ]; then
+              echo "✅ No new categories found. Skipping selective test run."
+              exit 0
             fi
 
-            docker push ${DOCKERHUB_USER}/${IMAGE_NAME}:${BUILD_TAG}
+            echo "🧩 New categories detected: $added_cats"
 
-            if [ -n "$LATEST" ]; then
-              docker tag ${DOCKERHUB_USER}/${IMAGE_NAME}:${BUILD_TAG} ${DOCKERHUB_USER}/${IMAGE_NAME}:$LATEST
-              docker push ${DOCKERHUB_USER}/${IMAGE_NAME}:$LATEST
+            # 逐个运行测试
+            missing_tests=0
+            failed_tests=0
+            for cat in $added_cats; do
+              echo "▶ Running tests for category: $cat"
+              pytest -k "$cat" || {
+                status=$?
+                if [ $status -eq 5 ]; then
+                  echo "❌ No test found for category '$cat'"
+                  missing_tests=1
+                else
+                  echo "❌ Some tests failed for category '$cat'"
+                  failed_tests=1
+                fi
+              }
+            done
+
+            if [ $missing_tests -eq 1 ]; then
+              echo "❌ Missing tests for one or more categories."
+              exit 1
             fi
+
+            if [ $failed_tests -eq 1 ]; then
+              echo "❌ One or more tests failed."
+              exit 1
+            fi
+
+            echo "✅ All new categories have tests and all passed!"
           '''
         }
       }
     }
-
-    stage('Deploy to STAGING (local)') {
-      when { branch 'develop' }
-      steps {
-        sh '''
-          set -eux
-          cat > .env <<EOF
-DOCKERHUB_USER=${DOCKERHUB_USER}
-IMAGE_NAME=${IMAGE_NAME}
-IMAGE_TAG=${DEV_TAG_LATEST}
-EOF
-          docker-compose down || true
-          docker-compose up -d
-          sleep 5
-          curl -fsS http://localhost:5000 | grep -q "Hello from" || (echo "Service not responding"; exit 1)
-        '''
-      }
-    }
-
-    stage('Deploy to PROD is external') {
-      when { branch 'main' }
-      steps {
-        echo 'Prod uses pull-mode (cron/webhook on prod host). '
-
-      }
-    }
-  }
-
-  post {
-    success { echo 'PIPELINE OK ✅' }
-    failure { echo 'PIPELINE FAILED ❌' }
   }
 }
+
