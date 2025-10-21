@@ -86,39 +86,56 @@ echo "✅ All tests passed successfully!"
   }
 
 // ===============================================
-  // 修改 POST 阶段，增加自动合并逻辑
+  // 修改 POST 阶段，增加条件判断逻辑
   // ===============================================
   post {
     success {
       echo 'PIPELINE ✅ All tests passed.'
       
       script {
-        // env.CHANGE_ID 是 Jenkins 在 PR 构建时自动设置的 PR 编号
+        // 1. 检查这是否是一个PR构建
         if (env.CHANGE_ID) {
-          echo "Tests passed. Attempting to auto-merge PR #${env.CHANGE_ID}..."
           
-          // 使用 Jenkins 的 'withCredentials' 来安全地加载 Token
-          // 'github-auto-merge-token' 必须与你在 Jenkins 中创建的凭据 ID 一致
-          withCredentials([string(credentialsId: 'github-auto-merge-token', variable: 'GITHUB_TOKEN')]) {
+          // 2. 检查PR的目标分支 (env.CHANGE_TARGET)
+          
+          if (env.CHANGE_TARGET == 'develop') {
+            // ----------------------------------------------------
+            // 目标是 develop: 执行自动合并
+            // ----------------------------------------------------
+            echo "Tests passed for PR #${env.CHANGE_ID} targeting 'develop'. Attempting to auto-merge..."
             
-            // 你的仓库信息
-            def GITHUB_OWNER = 'swe40006pj'
-            def REPO_NAME = 'Pipeline-Version-Control'
+            withCredentials([string(credentialsId: 'github-auto-merge-token', variable: 'GITHUB_TOKEN')]) {
+              
+              def GITHUB_OWNER = 'swe40006pj'
+              def REPO_NAME = 'Pipeline-Version-Control'
 
-          
-            sh """
-            # 确保 staging 节点安装了 curl
-            # apt-get install curl -y (如果需要)
+              // (安全改进：使用单引号 ''' 来防止 GITHUB_TOKEN 变量泄露)
+              sh """
+              curl -X PUT \
+                   -H "Authorization: token $GITHUB_TOKEN" \
+                   -H "Accept: application/vnd.github.v3+json" \
+                   "https://api.github.com/repos/${GITHUB_OWNER}/${REPO_NAME}/pulls/${env.CHANGE_ID}/merge" \
+                   -d '{"merge_method": "squash", "commit_title": "Auto-merge PR #${env.CHANGE_ID} by Jenkins CI", "delete_branch": true}'
+              """
+              
+              echo "✅ Successfully requested auto-merge for PR #${env.CHANGE_ID}."
+            }
             
-            curl -X PUT \
-                 -H "Authorization: token ${GITHUB_TOKEN}" \
-                 -H "Accept: application/vnd.github.v3+json" \
-                 "https://api.github.com/repos/${GITHUB_OWNER}/${REPO_NAME}/pulls/${env.CHANGE_ID}/merge" \
-                 -d '{"merge_method": "squash", "commit_title": "Auto-merge PR #${env.CHANGE_ID} by Jenkins CI", "delete_branch": true}'
-            """
+          } else if (env.CHANGE_TARGET == 'main') {
+            // ----------------------------------------------------
+            // 目标是 main: 仅报告成功，不合并
+            // ----------------------------------------------------
+            echo "Tests passed for PR #${env.CHANGE_ID} targeting 'main'."
+            echo "Skipping auto-merge to allow for human review as required by branch protection."
+            // 这里我们什么都不做，Jenkins 会自动向 GitHub 报告 "Success" 状态
             
-            echo "✅ Successfully requested auto-merge for PR #${env.CHANGE_ID}."
+          } else {
+            // ----------------------------------------------------
+            // 目标是其他分支 (以防万一): 不合并
+            // ----------------------------------------------------
+            echo "Tests passed for PR #${env.CHANGE_ID} targeting '${env.CHANGE_TARGET}'. Skipping auto-merge."
           }
+          
         } else {
           echo "Not a PR build (CHANGE_ID is null), skipping auto-merge."
         }
