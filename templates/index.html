@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Unit Converter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+    h1 { font-size: 22px; }
+    .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
+    label { font-size: 13px; color: #374151; display: block; margin-bottom: 6px; }
+    input, select, button { width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; }
+    button { background: #111827; color: white; cursor: pointer; }
+    button:disabled { background: #9ca3af; cursor: not-allowed; }
+    .result { background: #f9fafb; border-radius: 8px; padding: 12px; }
+    .muted { color: #6b7280; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Unit Converter</h1>
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Category</label>
+        <select id="category"></select>
+      </div>
+      <div>
+        <label>Value</label>
+        <input id="value" type="number" step="any" placeholder="Enter a number…" />
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>From</label>
+        <select id="fromUnit"></select>
+      </div>
+      <div>
+        <label>To</label>
+        <select id="toUnit"></select>
+      </div>
+    </div>
+
+    <div class="row">
+      <button id="convertBtn">Convert</button>
+      <button id="swapBtn" type="button">Swap Units</button>
+    </div>
+
+    <div class="result" id="resultBox">Result will appear here.</div>
+    <p class="muted" id="hint"></p>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const categorySel = $("category");
+    const fromSel = $("fromUnit");
+    const toSel = $("toUnit");
+    const valueInput = $("value");
+    const resultBox = $("resultBox");
+    const hint = $("hint");
+
+    let CATEGORIES = {};
+
+    async function loadCategories() {
+      const res = await fetch("/api/categories");
+      CATEGORIES = await res.json();
+
+      categorySel.innerHTML = "";
+      for (const key of Object.keys(CATEGORIES)) {
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.textContent = `${CATEGORIES[key].label} (${key})`;
+        categorySel.appendChild(opt);
+      }
+      onCategoryChange();
+    }
+    // test the process from feature -> develop -> main
+    function onCategoryChange() {
+      const cat = categorySel.value;
+      const units = CATEGORIES[cat].units;
+
+      fromSel.innerHTML = "";
+      toSel.innerHTML = "";
+      Object.entries(units).forEach(([u, label]) => {
+        const opt1 = document.createElement("option");
+        opt1.value = u; opt1.textContent = label;
+        fromSel.appendChild(opt1);
+
+        const opt2 = document.createElement("option");
+        opt2.value = u; opt2.textContent = label;
+        toSel.appendChild(opt2);
+      });
+      if (toSel.options.length > 1) toSel.selectedIndex = 1;
+
+      hint.textContent = categoryHint(cat);
+      resultBox.textContent = "Result will appear here.";
+    }
+
+    function categoryHint(cat) {
+      switch (cat) {
+        case "volume": return "Volume uses US liquid measures: fl oz, cup, and gallon are US units.";
+        case "energy": return "Energy uses 1 kcal = 4.184 kJ; 1 BTU ≈ 1.05505585262 kJ.";
+        case "area": return "Area base is m²: cm² = 1e-4 m², ft² ≈ 0.09290304 m², acre ≈ 4046.8564224 m².";
+        default: return "";
+      }
+    }
+
+    async function convertNow() {
+      const cat = categorySel.value;
+      const from = fromSel.value;
+      const to = toSel.value;
+      const val = parseFloat(valueInput.value);
+
+      if (!Number.isFinite(val)) {
+        resultBox.textContent = "Please enter a valid number.";
+        return;
+      }
+
+      const url = `/api/convert?category=${encodeURIComponent(cat)}&from=${encodeURIComponent(from)}
+      &to=${encodeURIComponent(to)}&value=${encodeURIComponent(val)}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        const err = await res.text();
+        resultBox.textContent = `Conversion failed: ${err}`;
+        return;
+      }
+      const data = await res.json();
+      resultBox.textContent = `${val} ${from}  =  ${data.result} ${to}`;
+    }
+
+    function swapUnits() {
+      const i = fromSel.selectedIndex;
+      fromSel.selectedIndex = toSel.selectedIndex;
+      toSel.selectedIndex = i;
+    }
+
+    categorySel.addEventListener("change", onCategoryChange);
+    $("convertBtn").addEventListener("click", convertNow);
+    $("swapBtn").addEventListener("click", swapUnits);
+
+    loadCategories();
+  </script>
+</body>
+</html>

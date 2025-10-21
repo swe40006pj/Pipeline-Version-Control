@@ -1,0 +1,79 @@
+pipeline {
+  // The agent 'staging' is both the build and deployment machine
+  agent { label 'staging' }
+
+  environment {
+    DOCKERHUB_NAMESPACE = "swe40006pj" 
+    APP_NAME            = "unit-converter"
+    DOCKERHUB_CREDENTIALS = 'docker-hub'
+    // GITHUB_CREDENTIALS is no longer needed after removing the manual git step
+    STAGE_TAG           = "stage"
+  }
+
+  stages {
+    // This stage is removed because the multibranch pipeline already handles the checkout.
+
+    stage('Build Docker Image') {
+      steps {
+        script {
+          // CRITICAL: Use 'def' to declare local variables
+          def COMMIT_ID = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+          def IMAGE_COMMIT = "docker.io/${DOCKERHUB_NAMESPACE}/${APP_NAME}:${COMMIT_ID}"
+          def IMAGE_STAGE = "docker.io/${DOCKERHUB_NAMESPACE}/${APP_NAME}:${STAGE_TAG}"
+
+          sh """
+            echo "=== Building image for develop (${IMAGE_STAGE}) ==="
+            docker build -f app/Dockerfile -t ${IMAGE_COMMIT} .
+            docker tag ${IMAGE_COMMIT} ${IMAGE_STAGE}
+          """
+        }
+      }
+    }
+
+    stage('Push to Docker Hub (:stage)') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: "${DOCKERHUB_CREDENTIALS}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+          // Note: The image variables must be re-defined here as they are out of scope from the previous stage
+          script {
+            def COMMIT_ID = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+            def IMAGE_COMMIT = "docker.io/${DOCKERHUB_NAMESPACE}/${APP_NAME}:${COMMIT_ID}"
+            def IMAGE_STAGE = "docker.io/${DOCKERHUB_NAMESPACE}/${APP_NAME}:${STAGE_TAG}"
+            
+            sh """
+              echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
+              docker push ${IMAGE_COMMIT}
+              docker push ${IMAGE_STAGE}
+              docker logout
+            """
+          }
+        }
+      }
+    }
+
+    stage('Deploy on Staging EC2') {
+      steps {
+        script {
+          // Re-define IMAGE_STAGE as it's out of scope from the build stage
+          def IMAGE_STAGE = "docker.io/${DOCKERHUB_NAMESPACE}/${APP_NAME}:${STAGE_TAG}"
+          
+          sh """
+            echo "=== Deploying stage container on local EC2 ==="
+            docker ps --filter "publish=5000" -q | xargs -r docker rm -f
+            docker rm -f ${APP_NAME}-stage || true
+            docker pull ${IMAGE_STAGE}
+            docker run -d --name ${APP_NAME}-stage -p 5000:5000 ${IMAGE_STAGE}
+          """
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      echo "✅ Staging environment updated successfully!"
+    }
+    failure {
+      echo "❌ Staging build or deploy failed."
+    }
+  }
+}

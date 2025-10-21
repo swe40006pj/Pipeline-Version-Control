@@ -1,8 +1,0 @@
-version: '3'
-services:
-  web:
-    image: ${DOCKERHUB_USER}/${IMAGE_NAME}:${IMAGE_TAG}
-    container_name: pipeline-demo
-    restart: always
-    ports:
-      - "5000:8080"
