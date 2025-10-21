@@ -1,0 +1,96 @@
+pipeline {
+  agent { label 'staging' }  // 在 staging 节点运行（或改为 'prod' 视环境）
+
+  stages {
+
+    stage('Checkout Current Branch') {
+      steps {
+        checkout scm
+      }
+    }
+
+    // ===============================================
+    // 核心阶段：在 Docker 中运行完整测试流程
+    // ===============================================
+    stage('Fetch Tests and Run Full Test Suite (in Docker)') {
+      agent {
+        docker {
+          image 'python:3.11-slim'
+          args '-u root' // root权限便于 apt/pip 安装
+        }
+      }
+
+      steps {
+        script {
+          sh '''
+set -e  # 出错立即退出
+
+echo "🐍 Setting up Python environment in Docker container"
+apt-get update && apt-get install -y git
+git config --global --add safe.directory ${WORKSPACE}
+
+# ===========================================================
+# 1️⃣ 从 test 分支拉取测试文件与配置
+# ===========================================================
+echo "=== Fetching tests from origin/test branch ==="
+git fetch origin test
+
+rm -rf tmp_test_branch
+mkdir tmp_test_branch
+
+# 导出 test 文件夹与配置
+git archive FETCH_HEAD test | tar -x -C tmp_test_branch || echo "⚠️ test folder not found"
+git archive FETCH_HEAD test/pytest.ini test/conftest.py test/requirements.txt | tar -x -C tmp_test_branch || echo "⚠️ Some config files may not exist."
+
+# 拷贝回当前工作区
+for f in test pytest.ini conftest.py requirements.txt; do
+  if [ -e tmp_test_branch/$f ]; then
+    echo "✅ Updating $f from test branch"
+    rm -rf $f
+    mv tmp_test_branch/$f ./
+  else
+    echo "⚠️ $f not found in test branch"
+  fi
+done
+
+echo "Listing fetched test directory:"
+ls -R test || echo "⚠️ test directory missing after fetch"
+
+# ===========================================================
+# 2️⃣ 安装依赖项
+# ===========================================================
+echo "=== Installing ALL dependencies ==="
+if [ -f requirements.txt ]; then
+  echo "📦 Installing test requirements..."
+  pip install -r requirements.txt
+else
+  pip install pytest
+fi
+
+if [ -f app/requirements.txt ]; then
+  echo "📦 Installing application requirements..."
+  pip install -r app/requirements.txt
+fi
+
+# ===========================================================
+# 3️⃣ 执行完整 pytest 测试
+# ===========================================================
+echo "=== Running full test suite ==="
+pytest -v test/ --maxfail=1 --disable-warnings
+
+echo "✅ All tests passed successfully!"
+'''
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      echo 'PIPELINE ✅ All tests passed for main release.'
+    }
+    failure {
+      echo 'PIPELINE ❌ Some tests failed. Please review test results.'
+    }
+  }
+}
