@@ -99,7 +99,7 @@ echo "✅ All tests passed successfully!"
           
           // 使用 Jenkins 的 'withCredentials' 来安全地加载 Token
           // 'github-merge-token' 必须与你在 Jenkins 中创建的凭据 ID 一致
-          withCredentials([string(credentialsId: 'github-merge-token', variable: 'GITHUB_TOKEN')]) {
+          withCredentials([string(credentialsId: 'github-https-pat', variable: 'GITHUB_TOKEN')]) {
             
             // 你的仓库信息
             def GITHUB_OWNER = 'swe40006pj'
