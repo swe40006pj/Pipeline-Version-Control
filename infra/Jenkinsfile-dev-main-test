@@ -110,13 +110,13 @@ echo "✅ All tests passed successfully!"
               def REPO_NAME = 'Pipeline-Version-Control'
 
               // (安全改进：使用单引号 ''' 来防止 GITHUB_TOKEN 变量泄露)
-              sh '''
+              sh """
               curl -X PUT \
                    -H "Authorization: token $GITHUB_TOKEN" \
                    -H "Accept: application/vnd.github.v3+json" \
                    "https://api.github.com/repos/${GITHUB_OWNER}/${REPO_NAME}/pulls/${env.CHANGE_ID}/merge" \
                    -d '{"merge_method": "squash", "commit_title": "Auto-merge PR #${env.CHANGE_ID} by Jenkins CI", "delete_branch": true}'
-              '''
+              """
               
               echo "✅ Successfully requested auto-merge for PR #${env.CHANGE_ID}."
             }
