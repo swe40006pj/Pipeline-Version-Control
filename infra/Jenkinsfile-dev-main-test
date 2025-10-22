@@ -109,7 +109,7 @@ echo "✅ All tests passed successfully!"
               def GITHUB_OWNER = 'swe40006pj'
               def REPO_NAME = 'Pipeline-Version-Control'
 
-              // (安全改进：使用单引号 ''' 来防止 GITHUB_TOKEN 变量泄露)
+
               sh """
               curl -X PUT \
                    -H "Authorization: token $GITHUB_TOKEN" \
