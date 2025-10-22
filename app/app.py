@@ -57,15 +57,15 @@ CATEGORIES = {
         }
     },
     # --- CATEGORIES: add this block inside the top-level CATEGORIES dict ---
-    "speed": {  # NEW: added 'speed' category (2025-10-22)
-        "label": "Speed",
-        "units": {
-        "mps": "Meter per second (m/s)",
-        "kmh": "Kilometer per hour (km/h)",
-        "mph": "Mile per hour (mph)",
-        "knot": "Knot (kn)"
-        }
-    }
+#     "speed": {  # NEW: added 'speed' category (2025-10-22)
+#         "label": "Speed",
+#         "units": {
+#         "mps": "Meter per second (m/s)",
+#         "kmh": "Kilometer per hour (km/h)",
+#         "mph": "Mile per hour (mph)",
+#         "knot": "Knot (kn)"
+#         }
+#     }
 }
 
 # Linear categories: conversion factors to a base unit
