@@ -1,5 +1,5 @@
 pipeline {
-  agent { label 'staging' }  // 在 staging 节点运行（或改为 'prod' 视环境）
+  agent { label 'staging' }
 
   stages {
 
@@ -9,28 +9,25 @@ pipeline {
       }
     }
 
-    // ===============================================
-    // 核心阶段：在 Docker 中运行完整测试流程
-    // ===============================================
-    stage('Fetch Tests and Run Full Test Suite (in Docker)') {
+    stage('Fetch Tests and Run Selective Category Tests (in Docker)') {
       agent {
         docker {
           image 'python:3.11-slim'
-          args '-u root' // root权限便于 apt/pip 安装
+          args '-u root'
         }
       }
 
       steps {
         script {
           sh '''
-set -e  # 出错立即退出
+set -e
 
 echo "🐍 Setting up Python environment in Docker container"
 apt-get update && apt-get install -y git
 git config --global --add safe.directory ${WORKSPACE}
 
 # ===========================================================
-# 1️⃣ 从 test 分支拉取测试文件与配置
+# 1️⃣ 从 test 分支拉取测试文件
 # ===========================================================
 echo "=== Fetching tests from origin/test branch ==="
 git fetch origin test
@@ -38,11 +35,9 @@ git fetch origin test
 rm -rf tmp_test_branch
 mkdir tmp_test_branch
 
-# 导出 test 文件夹与配置
 git archive FETCH_HEAD test | tar -x -C tmp_test_branch || echo "⚠️ test folder not found"
 git archive FETCH_HEAD test/pytest.ini test/conftest.py test/requirements.txt | tar -x -C tmp_test_branch || echo "⚠️ Some config files may not exist."
 
-# 拷贝回当前工作区
 for f in test pytest.ini conftest.py requirements.txt; do
   if [ -e tmp_test_branch/$f ]; then
     echo "✅ Updating $f from test branch"
@@ -61,55 +56,68 @@ ls -R test || echo "⚠️ test directory missing after fetch"
 # ===========================================================
 echo "=== Installing ALL dependencies ==="
 if [ -f requirements.txt ]; then
-  echo "📦 Installing test requirements..."
   pip install -r requirements.txt
 else
   pip install pytest
 fi
 
 if [ -f app/requirements.txt ]; then
-  echo "📦 Installing application requirements..."
+  echo "📦 Installing application dependencies (app/requirements.txt)..."
   pip install -r app/requirements.txt
 fi
 
 # ===========================================================
-# 3️⃣ 执行完整 pytest 测试
+# 3️⃣ 动态提取 categories 并运行测试
 # ===========================================================
-echo "=== Running full test suite ==="
-pytest -v test/ --maxfail=1 --disable-warnings
+echo "=== Extracting categories from app/app.py ==="
+cd app
+categories=$(python extract_cats.py)
 
-echo "✅ All tests passed successfully!"
+if [ -z "$categories" ]; then
+  echo "❌ No categories found from extract_cats.py, aborting."
+  exit 1
+fi
+
+echo "=== Categories detected ==="
+echo "$categories"
+cd ..
+
+cd test/tests
+failed=0
+
+for cat in $categories; do
+  test_file="test_${cat}.py"
+  if [ -f "$test_file" ]; then
+    echo "✅ Running test for $cat"
+    pytest -q "$test_file" || failed=1
+  else
+    echo "❌ Missing test file: $test_file (category: $cat)"
+    failed=1
+  fi
+done
+
+if [ $failed -ne 0 ]; then
+  echo "❌ Some categories are missing tests or failed"
+  exit 1
+else
+  echo "✅ All category tests passed successfully!"
+fi
 '''
         }
       }
     }
   }
 
-// ===============================================
-  // 修改 POST 阶段，增加条件判断逻辑
-  // ===============================================
   post {
     success {
       echo 'PIPELINE ✅ All tests passed.'
-      
       script {
-        // 1. 检查这是否是一个PR构建
         if (env.CHANGE_ID) {
-          
-          // 2. 检查PR的目标分支 (env.CHANGE_TARGET)
-          
           if (env.CHANGE_TARGET == 'develop') {
-            // ----------------------------------------------------
-            // 目标是 develop: 执行自动合并
-            // ----------------------------------------------------
             echo "Tests passed for PR #${env.CHANGE_ID} targeting 'develop'. Attempting to auto-merge..."
-            
             withCredentials([string(credentialsId: 'github-auto-merge-token', variable: 'GITHUB_TOKEN')]) {
-              
               def GITHUB_OWNER = 'swe40006pj'
               def REPO_NAME = 'Pipeline-Version-Control'
-
-
               sh """
               curl -X PUT \
                    -H "Authorization: token $GITHUB_TOKEN" \
@@ -117,25 +125,14 @@ echo "✅ All tests passed successfully!"
                    "https://api.github.com/repos/${GITHUB_OWNER}/${REPO_NAME}/pulls/${env.CHANGE_ID}/merge" \
                    -d '{"merge_method": "squash", "commit_title": "Auto-merge PR #${env.CHANGE_ID} by Jenkins CI", "delete_branch": true}'
               """
-              
               echo "✅ Successfully requested auto-merge for PR #${env.CHANGE_ID}."
             }
-            
           } else if (env.CHANGE_TARGET == 'main') {
-            // ----------------------------------------------------
-            // 目标是 main: 仅报告成功，不合并
-            // ----------------------------------------------------
             echo "Tests passed for PR #${env.CHANGE_ID} targeting 'main'."
             echo "Skipping auto-merge to allow for human review as required by branch protection."
-            // 这里我们什么都不做，Jenkins 会自动向 GitHub 报告 "Success" 状态
-            
           } else {
-            // ----------------------------------------------------
-            // 目标是其他分支 (以防万一): 不合并
-            // ----------------------------------------------------
             echo "Tests passed for PR #${env.CHANGE_ID} targeting '${env.CHANGE_TARGET}'. Skipping auto-merge."
           }
-          
         } else {
           echo "Not a PR build (CHANGE_ID is null), skipping auto-merge."
         }
