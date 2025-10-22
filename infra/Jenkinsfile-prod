@@ -3,13 +3,14 @@ pipeline {
   agent { label 'prod' }
 
   environment {
-    DOCKERHUB_NAMESPACE   = "swe40006pj" 
+    DOCKERHUB_NAMESPACE   = "swe40006pj"
     APP_NAME              = "unit-converter"
     DOCKERHUB_CREDENTIALS = 'docker-hub'
     PROD_TAG              = "prod"
   }
 
   stages {
+
     stage('Build Docker Image') {
       steps {
         script {
@@ -35,7 +36,7 @@ pipeline {
             def IMAGE_PROD   = "docker.io/${DOCKERHUB_NAMESPACE}/${APP_NAME}:${PROD_TAG}"
 
             sh """
-              echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
+              echo "\${DOCKER_PASS}" | docker login -u "\${DOCKER_USER}" --password-stdin
               docker push ${IMAGE_COMMIT}
               docker push ${IMAGE_PROD}
               docker logout
@@ -54,7 +55,7 @@ pipeline {
             echo "=== Deploying production container on EC2 ==="
 
             # Remove any existing container with same name
-            if [ "$(docker ps -aq -f name=${APP_NAME}-prod)" ]; then
+            if [ "\$(docker ps -aq -f name=${APP_NAME}-prod)" ]; then
               echo "🧹 Removing existing container: ${APP_NAME}-prod"
               docker rm -f ${APP_NAME}-prod
             else
