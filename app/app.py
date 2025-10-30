@@ -69,6 +69,7 @@ CATEGORIES = {
     }
 }
 
+
 # Linear categories: conversion factors to a base unit
 # length base: m; weight base: g; energy base: kJ; area base: m²; volume base: L (US liquid units)
 LINEAR_BASE = {
@@ -110,6 +111,7 @@ LINEAR_BASE = {
         "knot": 0.5144444444444445  # 1 kn = 1852/3600 m/s
     }
 }
+
 
 def convert_linear(category: str, from_u: str, to_u: str, value: float) -> float:
     base = LINEAR_BASE[category]
