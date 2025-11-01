@@ -57,6 +57,7 @@ CATEGORIES = {
             "gallon": "Gallon (US)"
         }
     },
+    # re-add
     # --- CATEGORIES: add this block inside the top-level CATEGORIES dict ---
     "speed": {  # NEW: added 'speed' category (2025-10-22)
         "label": "Speed",
