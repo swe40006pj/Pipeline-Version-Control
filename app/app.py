@@ -56,8 +56,17 @@ CATEGORIES = {
             "cup": "Cup (US)",
             "gallon": "Gallon (US)"
         }
+    },
+    # --- CATEGORIES: add this block inside the top-level CATEGORIES dict ---
+    "speed": {  # NEW: added 'speed' category (2025-10-22)
+        "label": "Speed",
+        "units": {
+        "mps": "Meter per second (m/s)",
+        "kmh": "Kilometer per hour (km/h)",
+        "mph": "Mile per hour (mph)",
+        "knot": "Knot (kn)"
+        }
     }
-  
 }
 
 
@@ -93,8 +102,14 @@ LINEAR_BASE = {
         "floz": 0.0295735295625,           # US fl oz
         "cup": 0.2365882365,               # US cup
         "gallon": 3.785411784              # US liquid gallon
+    },
+    # --- LINEAR_BASE: add this block inside the top-level LINEAR_BASE dict ---
+    "speed": {  # NEW: added 'speed' category (2025-10-22); base unit = m/s
+        "mps": 1.0,
+        "kmh": 0.2777777777777778,  # 1 km/h = 1000/3600 m/s
+        "mph": 0.44704,             # 1 mph = 0.44704 m/s
+        "knot": 0.5144444444444445  # 1 kn = 1852/3600 m/s
     }
-    
 }
 
 
